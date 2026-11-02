@@ -16,3 +16,12 @@ tests/smoke_logs/
 
 # local datasets
 data/
+
+# evaluation outputs: reports, figures, per-pair tables (the zero-shot baseline CSV is kept)
+evaluation/outputs/*
+!evaluation/outputs/baseline_sweep.csv
+
+# editors / OS
+.vscode/
+.idea/
+.DS_Store

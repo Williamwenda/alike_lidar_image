@@ -412,12 +412,66 @@ def warp_se3(kpts0, params):
     return kpts0_valid, kpts01_valid, ids_valid, ids_out
 
 
+def warp_dense(kpts0, params):
+    """Warp with dense ground-truth correspondences (lidar images, see lidar_tools/geometry.py).
+
+    params['corr']: (H, W, 2) (row, col) in image 1 of every pixel of image 0, NaN = no match.
+    Columns wrap around (360 deg lidar images). The flow (corr - pixel, column part wrapped) is
+    interpolated bilinearly at the keypoints; keypoints next to an unmatched pixel are not valid.
+    The flow is a constant of the keypoint position (local translation), so the gradient of the
+    warped keypoints w.r.t. the keypoints is the identity.
+
+    Keypoints without a match are neither valid nor 'out': unlike a homography, NaN does not mean
+    'outside the other image' (it can be an occlusion, no return, a close point), so they are
+    ignored by the losses.
+    """
+    corr = params['corr']
+    h, w = corr.shape[:2]
+    rows = torch.arange(h, device=corr.device, dtype=corr.dtype)[:, None]
+    cols = torch.arange(w, device=corr.device, dtype=corr.dtype)[None, :]
+    flow = torch.stack([corr[..., 0] - rows, torch.remainder(corr[..., 1] - cols + w / 2, w) - w / 2], dim=-1)
+
+    k = kpts0.detach()
+    x = torch.remainder(k[:, 0], w)
+    y = k[:, 1].clamp(0, h - 1)
+    x0 = x.floor().long()
+    y0 = y.floor().long().clamp(max=h - 2)
+    x1 = (x0 + 1) % w  # columns wrap
+    y1 = y0 + 1
+    ax, ay = (x - x0)[:, None], (y - y0)[:, None]
+    # column flows unwrapped relative to the nearest neighbour: near +-w/2 (scans rotated by ~180 deg)
+    # neighbours on both sides of the wrap must not average to 0
+    ref = flow[torch.where(ay[:, 0] < 0.5, y0, y1), torch.where(ax[:, 0] < 0.5, x0, x1), 1]
+
+    f = torch.zeros(len(k), 2, device=k.device, dtype=k.dtype)
+    invalid = torch.zeros(len(k), dtype=torch.bool, device=k.device)
+    for yy, xx, wgt in ((y0, x0, (1 - ay) * (1 - ax)), (y0, x1, (1 - ay) * ax),
+                        (y1, x0, ay * (1 - ax)), (y1, x1, ay * ax)):
+        fl = flow[yy, xx]
+        fl = torch.stack([fl[:, 0], ref + torch.remainder(fl[:, 1] - ref + w / 2, w) - w / 2], dim=1)
+        used = wgt[:, 0] > 0  # a neighbour with zero weight does not count
+        invalid |= used & ~torch.isfinite(fl).all(1)
+        f = f + torch.where(used[:, None], wgt * torch.nan_to_num(fl), 0.)
+
+    kpts01 = torch.stack([torch.remainder(kpts0[:, 0] + f[:, 1], w), kpts0[:, 1] + f[:, 0]], dim=1)
+    k01 = kpts01.detach()
+    inside = (k[:, 0] >= 0) & (k[:, 0] <= w - 1) & (k[:, 1] >= 0) & (k[:, 1] <= h - 1) & \
+             (k01[:, 0] <= w - 1) & (k01[:, 1] >= 0) & (k01[:, 1] <= h - 1)  # col in (w-1, w): across the seam
+    valid = inside & ~invalid
+
+    ids = torch.nonzero(valid, as_tuple=False)[:, 0]
+    ids_out = ids.new_zeros(0)
+    return kpts0[valid], kpts01[valid], ids, ids_out
+
+
 def warp(kpts0, params: dict):
     mode = params['mode']
     if mode == 'homo':
         return warp_homography(kpts0, params)
     elif mode == 'se3':
         return warp_se3(kpts0, params)
+    elif mode == 'dense':
+        return warp_dense(kpts0, params)
     else:
         raise ValueError('unknown mode!')
 
