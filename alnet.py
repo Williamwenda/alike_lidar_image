@@ -1,3 +1,4 @@
+# Copied from ALIKE (https://github.com/Shiaoming/ALIKE), unchanged.
 import torch
 from torch import nn
 from torchvision.models import resnet

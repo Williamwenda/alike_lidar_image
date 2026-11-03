@@ -1,3 +1,4 @@
+# Copied from ALIKE (https://github.com/Shiaoming/ALIKE), unchanged.
 import copy
 import os
 import cv2

@@ -33,6 +33,7 @@ class LidarTrainWrapper(TrainWrapper):
         self.num_val_figures = num_val_figures
         self.dkd_eval = DKD(radius=self.radius, top_k=eval_top_k, scores_th=self.scores_th_eval,
                             n_limit=self.n_limit_eval)
+        # for fine-tuning: select which blocks to freeze based on the provided prefixes
         for name, p in self.named_parameters():
             if any(name.startswith(f) for f in freeze):
                 p.requires_grad = False
@@ -44,6 +45,9 @@ class LidarTrainWrapper(TrainWrapper):
         h, w = image.shape[2:]
         descriptor_map, scores_map = self.extract_dense_map(image)
         kpts, desc, _, _ = self.dkd_eval(scores_map, descriptor_map, sub_pixel=True)
+        # the DKD detector returns normalized coordinates, from -1 to 1 in both x and y directions
+        # (-1, -1) -> top-left corner, (0, 0) -> image center, (1, 1) -> bottom-right corner
+        # the following converts the keypoints to pixel coordinates
         kpts = (kpts[0] + 1) / 2 * kpts[0].new_tensor([[w - 1, h - 1]])
         return kpts.cpu().numpy(), desc[0].cpu().numpy()
 

@@ -1,3 +1,4 @@
+# Copied from the ALIKE training code (https://github.com/Shiaoming/ALIKE, assets/ALIKE_code.zip).
 import os
 import copy
 import h5py

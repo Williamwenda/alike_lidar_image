@@ -1,3 +1,4 @@
+# Copied from the ALIKE training code (https://github.com/Shiaoming/ALIKE, assets/ALIKE_code.zip); warp_dense (lidar) added.
 import cv2
 import torch
 import numpy as np

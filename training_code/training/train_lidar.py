@@ -66,7 +66,6 @@ NUM_WORKERS = 8
 MONITOR = 'val/rep@3'              # checkpoint selection: detection repeatability (see lidar_tools.metrics)
 GPUS = [0]
 LOG_DIR = Path(__file__).resolve().parent / 'log_lidar'
-QUICK_CHECK = False                # True: 1 short epoch, to check the pipeline after changes
 ###########################################
 
 
@@ -75,17 +74,37 @@ if __name__ == '__main__':
     torch.set_float32_matmul_precision('high')
 
     model = LidarTrainWrapper(
-        **ARCH, agg_mode='cat', pe=False,
-        radius=2, top_k=TOP_K, scores_th=0, n_limit=0, scores_th_eval=0.2, n_limit_eval=5000,
-        train_gt_th=TRAIN_GT_TH, eval_gt_th=3,
-        w_pk=W_PK, w_rp=W_RP, w_sp=W_SP, w_ds=W_DS, w_triplet=0,
-        sc_th=SC_TH, norm=NORM, temp_sp=TEMP_SP, temp_ds=TEMP_DS,
-        lr=LR, log_freq_img=500, pretrained_model=str(PRETRAINED),
+        **ARCH, 
+        agg_mode='cat', 
+        pe=False,
+        radius=2, 
+        top_k=TOP_K, 
+        scores_th=0, 
+        n_limit=0, 
+        scores_th_eval=0.2, 
+        n_limit_eval=5000,
+        train_gt_th=TRAIN_GT_TH, 
+        eval_gt_th=3,
+        w_pk=W_PK, 
+        w_rp=W_RP, 
+        w_sp=W_SP, 
+        w_ds=W_DS, 
+        w_triplet=0,
+        sc_th=SC_TH, 
+        norm=NORM, 
+        temp_sp=TEMP_SP, 
+        temp_ds=TEMP_DS,
+        lr=LR, 
+        log_freq_img=500, 
+        pretrained_model=str(PRETRAINED),
         lr_scheduler=functools.partial(WarmupConstantSchedule, warmup_steps=WARMUP_STEPS),
-        eval_top_k=EVAL_TOP_K, freeze=FREEZE)
+        eval_top_k=EVAL_TOP_K, 
+        freeze=FREEZE)
 
+    # training and validation datasets
     train_set = LidarPairDataset(SPLIT_FILE, 'train', channel=CHANNEL, corr_min_range=CORR_MIN_RANGE, augment=True)
     val_set = LidarPairDataset(SPLIT_FILE, 'val', channel=CHANNEL, corr_min_range=CORR_MIN_RANGE)
+    # training and validation data loaders
     train_loader = DataLoader(train_set, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS,
                               pin_memory=True, drop_last=True, persistent_workers=True)
     val_loader = DataLoader(val_set, batch_size=1, num_workers=NUM_WORKERS, persistent_workers=True)
@@ -93,14 +112,29 @@ if __name__ == '__main__':
 
     version = time.strftime('%m%d-%H%M%S')
     logger = TensorBoardLogger(save_dir=str(LOG_DIR), name=MODEL, version=version, default_hp_metric=False)
+    # save the checkpoint:
+    # the checkpoint are selected based on the monitored metric (MONITOR) and saved in ckpt_dir
     ckpt_dir = Path(logger.log_dir) / 'checkpoints'
-    checkpoint = ModelCheckpoint(monitor=MONITOR, mode='max', save_top_k=2, save_last=True, dirpath=ckpt_dir,
-                                 auto_insert_metric_name=False,
-                                 filename='epoch={epoch}-' + MONITOR.replace('/', '_') + '={' + MONITOR + ':.4f}')
-    quick = dict(max_epochs=1, limit_train_batches=40, limit_val_batches=12) if QUICK_CHECK else dict(max_epochs=MAX_EPOCHS)
-    trainer = pl.Trainer(accelerator='gpu', devices=GPUS, **quick,
-                         accumulate_grad_batches=ACCUMULATE, num_sanity_val_steps=0, logger=logger,
-                         callbacks=[checkpoint, LearningRateMonitor(logging_interval='step')])
+    checkpoint = ModelCheckpoint(
+        monitor=MONITOR,                 # metric to monitor for saving the best checkpoint
+        mode='max',                      # mode for the monitored metric ('max' means higher is better)
+        save_top_k=2,                    # number of top checkpoints to save
+        save_last=True,                  # whether to save the last checkpoint
+        dirpath=ckpt_dir,                # directory to save the checkpoints
+        auto_insert_metric_name=False,   # whether to automatically insert the metric name into the filename
+        filename='epoch={epoch}-' + MONITOR.replace('/', '_') + '={' + MONITOR + ':.4f}'  # filename format for the checkpoint
+        )
+    
+    # initialize the PyTorch Lightning trainer 
+    trainer = pl.Trainer(
+        accelerator='gpu',
+        devices=GPUS, 
+        max_epochs=MAX_EPOCHS,
+        accumulate_grad_batches=ACCUMULATE, 
+        num_sanity_val_steps=0, 
+        logger=logger,
+        callbacks=[checkpoint, LearningRateMonitor(logging_interval='step')]
+    )
 
     trainer.validate(model, val_loader)  # pretrained baseline at step 0 (all val pairs, also in a quick check)
     trainer.fit(model, train_dataloaders=train_loader, val_dataloaders=val_loader)

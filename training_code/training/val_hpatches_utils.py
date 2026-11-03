@@ -1,3 +1,4 @@
+# Copied from the ALIKE training code (https://github.com/Shiaoming/ALIKE, assets/ALIKE_code.zip).
 import torch
 import numpy as np
 import matplotlib.pyplot as plt

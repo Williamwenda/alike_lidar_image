@@ -1,3 +1,4 @@
+# Copied from the ALIKE training code (https://github.com/Shiaoming/ALIKE, assets/ALIKE_code.zip), ported to PyTorch Lightning 2.x.
 import os
 import sys
 import time
