@@ -1,14 +1,14 @@
 """Export the network weights of a Lightning checkpoint to a .pth that the inference ALike loads.
 
-    uv run python -m lidar_tools.export <checkpoint.ckpt> [alike-n] [out.pth]
+    cd training_code && uv run python -m training.export <checkpoint.ckpt> [alike-n] [out.pth]
 """
 import sys
 from pathlib import Path
 
 import torch
 
-from lidar_tools import REPO_ROOT  # noqa: F401  (puts the inference ALIKE on the path)
-from alike import ALike, configs
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # repo root (inference ALIKE)
+from alike import ALike, configs  # noqa: E402
 
 
 def ckpt_to_pth(ckpt_path, name='alike-n', out_path=None):

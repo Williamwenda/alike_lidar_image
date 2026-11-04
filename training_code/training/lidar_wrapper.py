@@ -2,7 +2,7 @@
 
 Training is ALIKE's (losses on correspondences from utils.warp_dense). Validation runs the same
 inference path as ALike.forward (8-bit image, dense maps, DKD with a fixed top_k, sub-pixel) and the
-same metrics as evaluation/eval_test.py (lidar_tools.metrics), so validation and test numbers of a
+same metrics as lidar_image_nn_evaluation/eval_features.py (lidar_tools.metrics), so validation and test numbers of a
 checkpoint are directly comparable.
 """
 import sys
@@ -11,7 +11,8 @@ from pathlib import Path
 import numpy as np
 import torch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # repo root
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # repo root (inference ALIKE)
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'lidar_image_nn_evaluation'))  # lidar_tools
 from lidar_tools.metrics import evaluate_pair, mean_metrics  # noqa: E402
 from lidar_tools.plots import pair_figure, figure_to_array  # noqa: E402
 from soft_detect import DKD  # noqa: E402  (inference detector, repo root)
@@ -24,7 +25,7 @@ LOGGED = ['rep@1', 'rep@2', 'rep@3', 'loc_err', 'num_rep@3', 'cov_ratio',
 class LidarTrainWrapper(TrainWrapper):
     def __init__(self, *args, eval_top_k: int = 500, freeze: tuple = (), num_val_figures: int = 4, **kwargs):
         """
-        :param eval_top_k: keypoints per image in validation (same as evaluation/eval_test.py)
+        :param eval_top_k: keypoints per image in validation (same as lidar_image_nn_evaluation/eval_features.py)
         :param freeze: parameter name prefixes not to train, e.g. ('block1', 'block2')
         :param num_val_figures: validation pairs drawn to TensorBoard every epoch
         """

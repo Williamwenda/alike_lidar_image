@@ -1,4 +1,5 @@
-"""Checks of the lidar fine-tuning pipeline on real pairs (needs the lidar_image_process outputs).
+"""Checks of the lidar fine-tuning pipeline on real pairs (needs the lidar_image_process outputs):
+the training ground-truth warp and dataset agree with lidar_image_nn_evaluation/lidar_tools.
 
     uv run python tests/test_lidar_pipeline.py
 """
@@ -9,16 +10,15 @@ import numpy as np
 import torch
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT.parent / 'lidar_image_nn_evaluation'))  # lidar_tools
 sys.path.insert(0, str(ROOT / 'training_code'))
 
 from lidar_tools.pairs import split_pairs, load_pair  # noqa: E402
 from lidar_tools.geometry import gt_warp, wrap_col  # noqa: E402
 from utils import warp_dense  # noqa: E402  (training_code/utils)
 from datasets.lidar_pairs import LidarPairDataset  # noqa: E402
-from lidar_tools.pose import pose_metrics  # noqa: E402
 
-SPLIT = ROOT / 'splits' / 'default.json'
+SPLIT = ROOT.parent / 'lidar_image_nn_evaluation' / 'splits' / 'default.json'
 
 
 def test_warp_dense_matches_numpy():
@@ -95,27 +95,7 @@ def test_dataset_item():
     print(f'dataset: {len(ds)} training pairs, {len(ev)} val pairs; item {item["name"]} ok')
 
 
-def test_pose_from_ground_truth():
-    """Relative pose from ground-truth correspondences recovers the ICP pose when the within-scan motion is
-    compensated (conventions, 180 deg rotation, re-distortion), and is clearly worse without."""
-    rng = np.random.default_rng(0)
-    val = split_pairs(SPLIT, 'val')
-    for it in (val[10], max(val, key=lambda p: p['dist'])):
-        pair = load_pair(it['path'], 3.0)
-        rows, cols = np.nonzero(np.isfinite(pair['corr_AB'][..., 0]))
-        sel = rng.choice(len(rows), min(300, len(rows)), replace=False)
-        k0 = np.stack([cols[sel], rows[sel]], 1).astype(float)
-        k1 = pair['corr_AB'][rows[sel], cols[sel]][:, ::-1].astype(float)  # (row, col) -> (x, y)
-        matches = np.stack([np.arange(len(sel))] * 2, 1)
-        m = pose_metrics(it, pair, k0, k1, matches)
-        raw = pose_metrics(it, pair, k0, k1, matches, {'compensate': False})
-        assert m['t_err'] < 0.02 and m['R_err'] < 0.1, f'pose from ground truth off by {m["t_err"]:.3f} m / {m["R_err"]:.3f} deg'
-        print(f'pose from ground truth ({it["name"]}, {it["dist"]:.1f} m): {100 * m["t_err"]:.1f} cm / {m["R_err"]:.3f} deg '
-              f'({m["pose_inliers"]} inliers); without motion compensation {100 * raw["t_err"]:.1f} cm / {raw["R_err"]:.3f} deg')
-
-
 if __name__ == '__main__':
-    test_pose_from_ground_truth()
     test_warp_dense_matches_numpy()
     test_roll_keeps_correspondences()
     test_dataset_item()

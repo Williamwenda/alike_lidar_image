@@ -4,7 +4,7 @@
 
 1. validates the pretrained model (step 0 in TensorBoard = the baseline),
 2. fine-tunes on the 'train' split, validating every epoch on 'val' (also per distance bin and facing),
-3. exports the best and the last checkpoint to .pth for evaluation/eval_test.py.
+3. exports the best and the last checkpoint to .pth for lidar_image_nn_evaluation/eval_features.py.
 
 TensorBoard: `uv run tensorboard --logdir training_code/training/log_lidar`
 """
@@ -30,7 +30,7 @@ from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint  # 
 from datasets.lidar_pairs import LidarPairDataset  # noqa: E402
 from training.lidar_wrapper import LidarTrainWrapper  # noqa: E402
 from training.scheduler import WarmupConstantSchedule  # noqa: E402
-from lidar_tools.export import ckpt_to_pth  # noqa: E402
+from training.export import ckpt_to_pth  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -45,13 +45,13 @@ ARCH = {'alike-t': dict(c1=8, c2=16, c3=32, c4=64, dim=64, single_head=True),
 FREEZE = ()                        # e.g. ('block1', 'block2') to keep the first layers fixed
 
 # ---------- data
-SPLIT_FILE = REPO_ROOT / 'splits' / 'default.json'
+SPLIT_FILE = REPO_ROOT.parent / 'lidar_image_nn_evaluation' / 'splits' / 'default.json'
 CHANNEL = 'signal'                 # 'signal' or 'reflec'
 CORR_MIN_RANGE = 3.0               # [m] no ground truth closer than this
 
 # ---------- detection / losses (ALIKE defaults unless noted)
 TOP_K = 400                        # keypoints per image in training (+ as many random points)
-EVAL_TOP_K = 500                   # keypoints per image in validation (as evaluation/eval_test.py)
+EVAL_TOP_K = 500                   # keypoints per image in validation (as lidar_image_nn_evaluation/eval_features.py)
 TRAIN_GT_TH = 3                    # [px] ALIKE: 5 (480 px images); a lidar row is ~0.35 deg
 W_PK, W_RP, W_SP, W_DS = 0.5, 1.0, 1.0, 5.0   # peaky, reprojection (keypoint position), score map, descriptor
 SC_TH, NORM, TEMP_SP, TEMP_DS = 0.1, 1, 0.1, 0.1

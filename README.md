@@ -12,27 +12,20 @@ ported to Python 3.12 / PyTorch 2.x / PyTorch Lightning 2.x. Original code is BS
 alike.py, alnet.py, soft_detect.py   inference model (ALike class, network, differentiable keypoint detection)
 demo.py                              run detection + mutual-NN matching on an image folder / video / camera
 models/alike-{t,s,n,l}.pth           pretrained weights
-lidar_tools/                         lidar pairs, shared by training and evaluation
-  geometry.py                        ground-truth lookup in the dense correspondences
-  pairs.py                           pair files and their index (distance, facing), preprocessing, splits
-  metrics.py                         detection (repeatability, localisation) and matching metrics
-  model.py, export.py, plots.py      inference models, checkpoint -> .pth, figures
-splits/                              make_splits.py -> default.json (train / val / test, by place)
 training_code/
   training/train_lidar.py            fine-tuning on lidar pairs (parameter block at the top)
   training/lidar_wrapper.py          TrainWrapper with lidar validation (same metrics as the test report)
+  training/export.py                 Lightning checkpoint -> .pth for the inference ALike
   datasets/lidar_pairs.py            lidar pair dataset (warp mode 'dense'), augmentation
   utils/utils.py                     warp(): 'homo', 'se3' and 'dense' (lidar) modes
   training/train.py, train_wrapper.py, nets/, datasets/{megadepth,hpatches}.py   original ALIKE training
-evaluation/
-  eval_test.py                       test report: methods vs ground truth on the held-out pairs, per distance /
-                                     facing, and inference time (ORB, ALIKE, XFeat: lidar_tools/model.py)
-  eval_orb.py                        ORB settings for lidar images, on the val split
-  eval_pair.py                       one pair, one or more models: metrics + figures
-  eval_pairs.py                      sweep models x channels x preprocessing on the val pairs
-tests/test_lidar_pipeline.py         checks of the lidar pipeline on real pairs
+tests/test_lidar_pipeline.py         checks of the training data pipeline on real pairs
 tests/smoke_test.py                  end-to-end training check on synthetic homography pairs
 ```
+
+The lidar data, ground truth, splits, metrics and every evaluation script (ORB, ALIKE, XFeat; repeatability,
+localisation, matching, timing, relative pose) are in `../lidar_image_nn_evaluation/`: the training imports its
+`lidar_tools` (pairs, ground-truth warp, metrics for validation) and `splits/default.json`.
 
 ## Setup
 
@@ -52,27 +45,25 @@ column, Ouster beam model, occlusion and cycle checks) gives for every pixel of 
 location in frame B: `outputs/<seq>/pairs/<A>_<B>.npz`, `corr_AB` / `corr_BA`, and `index.csv` (distance,
 rotation, overlap of every pair). Pairs are chosen by position: 1-15 m apart, any heading, revisits
 included. The dense maps are the projection model evaluated at every pixel; a keypoint between pixels
-is warped by interpolating them (`lidar_tools/geometry.py`); pixels next to a depth edge get no ground
+is warped by interpolating them (`lidar_image_nn_evaluation/lidar_tools/geometry.py`); pixels next to a depth edge get no ground
 truth (`lidar_tools.pairs.load_pair`), since interpolating across surfaces is wrong.
 
 ```shell
-uv run python splits/make_splits.py                      # 1. splits/default.json (after new pairs)
-uv run python tests/test_lidar_pipeline.py               # 2. checks of the pipeline
-uv run python evaluation/eval_orb.py                     #    ORB settings for lidar images (val split)
-uv run python evaluation/eval_test.py                    # 3. baseline report -> evaluation/outputs/test_report_*/
-cd training_code/training && uv run python train_lidar.py && cd -   # 4. fine-tune
-uv run tensorboard --logdir training_code/training/log_lidar        #    progress, val per distance / facing, figures
-uv run python evaluation/eval_test.py                    # 5. report: ORB, ALIKE, XFeat, pretrained / fine-tuned, accuracy + time
-uv run python evaluation/eval_pair.py                    # 6. look at any pair, any models
+cd ../lidar_image_nn_evaluation && uv run python splits/make_splits.py && cd -   # 1. splits (only after new pairs)
+uv run python tests/test_lidar_pipeline.py                              # 2. checks of the training data pipeline
+cd training_code/training && uv run python train_lidar.py && cd -       # 3. fine-tune
+uv run tensorboard --logdir training_code/training/log_lidar            #    progress, val per distance / facing, figures
+cd ../lidar_image_nn_evaluation && uv run python eval_features.py              # 4. report: ORB, ALIKE, XFeat, accuracy + time
+uv run python eval_relative_pose.py                                     #    relative pose from the matches
 ```
 
-Splits (`splits/make_splits.py`), by place: `test` = whole routes never used in training (grassy, dome);
+Splits (`lidar_image_nn_evaluation/splits/make_splits.py`), by place: `test` = whole routes never used in training (grassy, dome);
 on parking and woody, `val` (checkpoint selection) = the frames within 15 m of one section of the
 route, with both passes of a revisit, then a 15 m buffer in no split; the rest is `train`. A pair is in
 a split only if both frames are. Results are reported per route, per distance between the scans and per
 facing (same / side / opposite).
 
-Metrics (`lidar_tools/metrics.py`; a keypoint has ground truth if its location in the other image is
+Metrics (`lidar_image_nn_evaluation/lidar_tools/metrics.py`; a keypoint has ground truth if its location in the other image is
 known, beyond `CORR_MIN_RANGE` = 3 m):
 
 | | metric | meaning |

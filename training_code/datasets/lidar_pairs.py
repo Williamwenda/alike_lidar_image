@@ -13,7 +13,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # repo root, for lidar_tools
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'lidar_image_nn_evaluation'))  # lidar_tools
 from lidar_tools.pairs import split_pairs, load_pair, preprocess  # noqa: E402
 
 
